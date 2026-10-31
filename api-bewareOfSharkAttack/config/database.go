@@ -19,7 +19,7 @@ func ConnectDB() *sql.DB {
 	if dbHost == "" {
 		dbHost = "localhost"
 		dbUser = "postgres"
-		dbPassword = "120126Rop_"
+		dbPassword = "postgressql"
 		dbName = "shark_attacks"
 		dbPort = "5432"
 	}
