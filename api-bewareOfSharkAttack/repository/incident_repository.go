@@ -57,6 +57,11 @@ func (r *IncidentRepository) GetAll(limit, offset int) ([]entity.Incident, error
 		incidents = append(incidents, inc)
 	}
 
+	// Tambahkan pengecekan error setelah iterasi selesai
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+
 	return incidents, nil
 }
 

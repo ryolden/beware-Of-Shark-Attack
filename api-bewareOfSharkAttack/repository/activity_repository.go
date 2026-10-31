@@ -29,6 +29,12 @@ func (r *ActivityRepository) GetAll() ([]entity.Activity, error) {
 		}
 		activities = append(activities, act)
 	}
+
+	// Tambahkan pengecekan ini untuk menyelesaikan warning linter
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+
 	return activities, nil
 }
 
