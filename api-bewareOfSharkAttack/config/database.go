@@ -10,12 +10,14 @@ import (
 )
 
 func ConnectDB() *sql.DB {
-	dbHost := os.Getenv("DB_HOST")
-	dbUser := os.Getenv("DB_USER")
-	dbPassword := os.Getenv("DB_PASSWORD")
-	dbName := os.Getenv("DB_NAME")
-	dbPort := os.Getenv("DB_PORT")
+	// 1. Baca dari DB_* atau fallback ke POSTGRES_* bawaan Vercel/Neon
+	dbHost := getEnv("DB_HOST", os.Getenv("POSTGRES_HOST"))
+	dbUser := getEnv("DB_USER", os.Getenv("POSTGRES_USER"))
+	dbPassword := getEnv("DB_PASSWORD", os.Getenv("POSTGRES_PASSWORD"))
+	dbName := getEnv("DB_NAME", os.Getenv("POSTGRES_DATABASE"))
+	dbPort := getEnv("DB_PORT", os.Getenv("POSTGRES_PORT"))
 
+	// 2. Default jika running lokal tanpa .env
 	if dbHost == "" {
 		dbHost = "localhost"
 		dbUser = "postgres"
@@ -24,8 +26,18 @@ func ConnectDB() *sql.DB {
 		dbPort = "5432"
 	}
 
-	dsn := fmt.Sprintf("host=%s port=%s user=%s password=%s dbname=%s sslmode=disable",
-		dbHost, dbPort, dbUser, dbPassword, dbName)
+	if dbPort == "" {
+		dbPort = "5432"
+	}
+
+	// 3. Tentukan sslmode (Neon Cloud Wajib sslmode=require)
+	sslMode := "disable"
+	if dbHost != "localhost" && dbHost != "127.0.0.1" {
+		sslMode = "require"
+	}
+
+	dsn := fmt.Sprintf("host=%s port=%s user=%s password=%s dbname=%s sslmode=%s",
+		dbHost, dbPort, dbUser, dbPassword, dbName, sslMode)
 
 	db, err := sql.Open("postgres", dsn)
 	if err != nil {
@@ -34,9 +46,17 @@ func ConnectDB() *sql.DB {
 
 	err = db.Ping()
 	if err != nil {
-		log.Fatalf("Gagal terhubung ke PostgreSQL: %v", err)
+		log.Printf("Gagal terhubung ke PostgreSQL: %v", err)
+	} else {
+		fmt.Println("Koneksi PostgreSQL berhasil!")
 	}
 
-	fmt.Println("Koneksi PostgreSQL berhasil!")
 	return db
+}
+
+func getEnv(key, fallback string) string {
+	if value := os.Getenv(key); value != "" {
+		return value
+	}
+	return fallback
 }
