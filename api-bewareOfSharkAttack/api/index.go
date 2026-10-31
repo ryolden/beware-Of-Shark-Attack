@@ -12,7 +12,7 @@ import (
 	"api-bewareOfSharkAttack/utils"
 )
 
-// PERHATIKAN: Nama fungsi wajib Handler (H kapital)
+// Wajib bernama Handler (H besar)
 func Handler(w http.ResponseWriter, r *http.Request) {
 	db := config.ConnectDB()
 	defer db.Close()
@@ -33,7 +33,7 @@ func Handler(w http.ResponseWriter, r *http.Request) {
 
 	mux := http.NewServeMux()
 
-	// Root route agar url utama tidak 404
+	// Root Route
 	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusOK)
@@ -71,6 +71,7 @@ func Handler(w http.ResponseWriter, r *http.Request) {
 			w.WriteHeader(http.StatusMethodNotAllowed)
 			return
 		}
+
 		filePath := "beware of shark attack(1) - 01 shark attacks lite.csv"
 		count, err := seederService.SeedCSV(filePath)
 		if err != nil {
@@ -78,12 +79,14 @@ func Handler(w http.ResponseWriter, r *http.Request) {
 			json.NewEncoder(w).Encode(map[string]string{"error": err.Error()})
 			return
 		}
+
 		json.NewEncoder(w).Encode(map[string]interface{}{
-			"status": "success",
-			"total":  count,
+			"status":  "success",
+			"message": "Import CSV data insiden berhasil",
+			"total":   count,
 		})
 	}))
 
-	// Teruskan request HTTP ke ServeMux
+	// Eksekusi HTTP Mux
 	mux.ServeHTTP(w, r)
 }
