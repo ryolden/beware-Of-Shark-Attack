@@ -14,10 +14,15 @@ import (
 )
 
 func getNormalizedPath(r *http.Request) string {
+	if p := r.URL.Query().Get("path"); p != "" {
+		return p
+	}
+
+	// 2. Fallback header Vercel Edge
 	headers := []string{"X-Invoke-Path", "X-Forwarded-Uri", "X-Original-Url", "X-Rewrite-Url"}
 	for _, h := range headers {
 		if val := r.Header.Get(h); val != "" {
-			if u, err := url.Parse(val); err == nil && u.Path != "" {
+			if u, err := url.Parse(val); err == nil && u.Path != "" && u.Path != "/api" {
 				return u.Path
 			}
 		}
@@ -26,7 +31,6 @@ func getNormalizedPath(r *http.Request) string {
 }
 
 func Handler(w http.ResponseWriter, r *http.Request) {
-	// Normalisasi path URL dari Vercel Edge
 	r.URL.Path = getNormalizedPath(r)
 
 	db := config.ConnectDB()
