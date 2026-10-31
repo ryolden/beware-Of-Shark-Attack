@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"net/url"
 	"os"
 
 	"api-bewareOfSharkAttack/config"
@@ -14,6 +15,18 @@ import (
 	"api-bewareOfSharkAttack/service"
 	"api-bewareOfSharkAttack/utils"
 )
+
+func getNormalizedPath(r *http.Request) string {
+	headers := []string{"X-Invoke-Path", "X-Forwarded-Uri", "X-Original-Url", "X-Rewrite-Url"}
+	for _, h := range headers {
+		if val := r.Header.Get(h); val != "" {
+			if u, err := url.Parse(val); err == nil && u.Path != "" {
+				return u.Path
+			}
+		}
+	}
+	return r.URL.Path
+}
 
 func main() {
 	db := config.ConnectDB()
@@ -35,8 +48,19 @@ func main() {
 
 	mux := http.NewServeMux()
 
-	// Root Route
+	// Root Route (Strict Check)
 	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/" && r.URL.Path != "" {
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusNotFound)
+			json.NewEncoder(w).Encode(map[string]interface{}{
+				"status":  "error",
+				"message": "Endpoint tidak ditemukan",
+				"path":    r.URL.Path,
+			})
+			return
+		}
+
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusOK)
 		w.Write([]byte(`{"status": "success", "message": "API Beware of Shark Attack is Live on Vercel"}`))
@@ -89,12 +113,17 @@ func main() {
 		})
 	}))
 
-	// Baca port otomatis dari Vercel Environment
+	// Wrapper handler untuk normalisasi path pada main.go
+	httpHandler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		r.URL.Path = getNormalizedPath(r)
+		mux.ServeHTTP(w, r)
+	})
+
 	port := os.Getenv("PORT")
 	if port == "" {
 		port = "8080"
 	}
 
 	fmt.Printf("Server berjalan di port %s\n", port)
-	log.Fatal(http.ListenAndServe(":"+port, mux))
+	log.Fatal(http.ListenAndServe(":"+port, httpHandler))
 }

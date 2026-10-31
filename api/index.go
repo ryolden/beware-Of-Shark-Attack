@@ -13,13 +13,21 @@ import (
 	"api-bewareOfSharkAttack/utils"
 )
 
-func Handler(w http.ResponseWriter, r *http.Request) {
-	// 2. Normalisasi URL Path dari Vercel
-	if forwardedURI := r.Header.Get("X-Forwarded-Uri"); forwardedURI != "" {
-		if parsedURL, err := url.Parse(forwardedURI); err == nil {
-			r.URL.Path = parsedURL.Path
+func getNormalizedPath(r *http.Request) string {
+	headers := []string{"X-Invoke-Path", "X-Forwarded-Uri", "X-Original-Url", "X-Rewrite-Url"}
+	for _, h := range headers {
+		if val := r.Header.Get(h); val != "" {
+			if u, err := url.Parse(val); err == nil && u.Path != "" {
+				return u.Path
+			}
 		}
 	}
+	return r.URL.Path
+}
+
+func Handler(w http.ResponseWriter, r *http.Request) {
+	// Normalisasi path URL dari Vercel Edge
+	r.URL.Path = getNormalizedPath(r)
 
 	db := config.ConnectDB()
 	defer db.Close()
@@ -40,8 +48,19 @@ func Handler(w http.ResponseWriter, r *http.Request) {
 
 	mux := http.NewServeMux()
 
-	// Root Route
+	// Root Route (Strict Check)
 	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/" && r.URL.Path != "" {
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusNotFound)
+			json.NewEncoder(w).Encode(map[string]interface{}{
+				"status":  "error",
+				"message": "Endpoint tidak ditemukan",
+				"path":    r.URL.Path,
+			})
+			return
+		}
+
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusOK)
 		w.Write([]byte(`{"status": "success", "message": "API Beware of Shark Attack is Live on Vercel"}`))
@@ -94,6 +113,5 @@ func Handler(w http.ResponseWriter, r *http.Request) {
 		})
 	}))
 
-	// Eksekusi HTTP Mux
 	mux.ServeHTTP(w, r)
 }
