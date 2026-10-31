@@ -19,33 +19,36 @@ func main() {
 	db := config.ConnectDB()
 	defer db.Close()
 
-	// Dependency Injection - User & Auth
 	userRepo := repository.NewUserRepository(db)
 	userService := service.NewUserService(userRepo)
 	userHandler := handler.NewUserHandler(userService)
 
-	// Dependency Injection - Master Activities
 	actRepo := repository.NewActivityRepository(db)
 	actService := service.NewActivityService(actRepo)
 	actHandler := handler.NewActivityHandler(actService)
 
-	// Dependency Injection - Incidents (Tabel Utama)
 	incRepo := repository.NewIncidentRepository(db)
 	incService := service.NewIncidentService(incRepo)
 	incHandler := handler.NewIncidentHandler(incService)
 
-	// Dependency Injection - Seeder CSV Hiu
 	seederService := service.NewSeederService(db)
 
 	mux := http.NewServeMux()
 
-	// -------------------- PUBLIC ROUTES --------------------
+	// Root Route
+	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		w.Write([]byte(`{"status": "success", "message": "API Beware of Shark Attack is Live on Vercel"}`))
+	})
+
+	// Public Routes
 	mux.HandleFunc("/api/users/register", userHandler.Register)
 	mux.HandleFunc("/api/users/login", userHandler.Login)
 	mux.HandleFunc("/api/incidents", incHandler.HandleIncidents)
 	mux.HandleFunc("/api/incidents/", incHandler.HandleIncidents)
 
-	// -------------------- PROTECTED ROUTES (JWT) --------------------
+	// Protected Routes (JWT)
 	mux.HandleFunc("/api/profile", middleware.JWTMiddleware(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		claims := r.Context().Value(middleware.UserContextKey).(*utils.Claims)
@@ -55,11 +58,10 @@ func main() {
 		})
 	}))
 
-	// CRUD Master Activities (JWT Protected)
 	mux.HandleFunc("/api/activities", middleware.JWTMiddleware(actHandler.HandleActivities))
 	mux.HandleFunc("/api/activities/", middleware.JWTMiddleware(actHandler.HandleActivities))
 
-	// -------------------- PROTECTED ROUTES (BASIC AUTH) --------------------
+	// Protected Routes (Basic Auth)
 	mux.HandleFunc("/api/admin/dashboard", middleware.BasicAuthMiddleware(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		w.Write([]byte(`{"message": "Akses admin terproteksi Basic Auth berhasil"}`))
@@ -69,7 +71,6 @@ func main() {
 		w.Header().Set("Content-Type", "application/json")
 		if r.Method != http.MethodPost {
 			w.WriteHeader(http.StatusMethodNotAllowed)
-			json.NewEncoder(w).Encode(map[string]string{"message": "Method tidak diizinkan, gunakan POST"})
 			return
 		}
 
@@ -88,13 +89,12 @@ func main() {
 		})
 	}))
 
+	// Baca port otomatis dari Vercel Environment
 	port := os.Getenv("PORT")
 	if port == "" {
-		port = "8081"
+		port = "8080"
 	}
 
-	fmt.Printf("Server berjalan di http://localhost:%s\n", port)
-	if err := http.ListenAndServe(":"+port, mux); err != nil {
-		log.Fatalf("Gagal menjalankan server: %v", err)
-	}
+	fmt.Printf("Server berjalan di port %s\n", port)
+	log.Fatal(http.ListenAndServe(":"+port, mux))
 }
