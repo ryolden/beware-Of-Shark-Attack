@@ -3,6 +3,7 @@ package handler
 import (
 	"encoding/json"
 	"net/http"
+	"net/url"
 
 	"api-bewareOfSharkAttack/config"
 	"api-bewareOfSharkAttack/handler"
@@ -12,8 +13,14 @@ import (
 	"api-bewareOfSharkAttack/utils"
 )
 
-// Wajib bernama Handler (H besar)
 func Handler(w http.ResponseWriter, r *http.Request) {
+	// 2. Normalisasi URL Path dari Vercel
+	if forwardedURI := r.Header.Get("X-Forwarded-Uri"); forwardedURI != "" {
+		if parsedURL, err := url.Parse(forwardedURI); err == nil {
+			r.URL.Path = parsedURL.Path
+		}
+	}
+
 	db := config.ConnectDB()
 	defer db.Close()
 
