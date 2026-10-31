@@ -12,6 +12,7 @@ import (
 	"api-bewareOfSharkAttack/utils"
 )
 
+// PERHATIKAN: Nama fungsi wajib Handler (H kapital)
 func Handler(w http.ResponseWriter, r *http.Request) {
 	db := config.ConnectDB()
 	defer db.Close()
@@ -32,11 +33,20 @@ func Handler(w http.ResponseWriter, r *http.Request) {
 
 	mux := http.NewServeMux()
 
+	// Root route agar url utama tidak 404
+	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		w.Write([]byte(`{"status": "success", "message": "API Beware of Shark Attack is Live on Vercel"}`))
+	})
+
+	// Public Routes
 	mux.HandleFunc("/api/users/register", userHandler.Register)
 	mux.HandleFunc("/api/users/login", userHandler.Login)
 	mux.HandleFunc("/api/incidents", incHandler.HandleIncidents)
 	mux.HandleFunc("/api/incidents/", incHandler.HandleIncidents)
 
+	// Protected Routes (JWT)
 	mux.HandleFunc("/api/profile", middleware.JWTMiddleware(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		claims := r.Context().Value(middleware.UserContextKey).(*utils.Claims)
@@ -49,6 +59,7 @@ func Handler(w http.ResponseWriter, r *http.Request) {
 	mux.HandleFunc("/api/activities", middleware.JWTMiddleware(actHandler.HandleActivities))
 	mux.HandleFunc("/api/activities/", middleware.JWTMiddleware(actHandler.HandleActivities))
 
+	// Protected Routes (Basic Auth)
 	mux.HandleFunc("/api/admin/dashboard", middleware.BasicAuthMiddleware(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		w.Write([]byte(`{"message": "Akses admin terproteksi Basic Auth berhasil"}`))
@@ -73,5 +84,6 @@ func Handler(w http.ResponseWriter, r *http.Request) {
 		})
 	}))
 
+	// Teruskan request HTTP ke ServeMux
 	mux.ServeHTTP(w, r)
 }
