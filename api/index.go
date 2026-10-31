@@ -1,6 +1,8 @@
 package handler
 
 import (
+	"bytes"
+	_ "embed" // Import embed untuk membaca file CSV saat kompilasi
 	"encoding/json"
 	"net/http"
 
@@ -11,6 +13,11 @@ import (
 	"api-bewareOfSharkAttack/service"
 	"api-bewareOfSharkAttack/utils"
 )
+
+// Embed file data.csv yang berada di dalam folder api/ langsung ke dalam biner
+//
+//go:embed data.csv
+var csvData []byte
 
 func Handler(w http.ResponseWriter, r *http.Request) {
 	db := config.ConnectDB()
@@ -71,8 +78,9 @@ func Handler(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		filePath := "beware of shark attack(1) - 01 shark attacks lite.csv"
-		count, err := seederService.SeedCSV(filePath)
+		// Mengubah slice bytes dari csvData menjadi io.Reader
+		reader := bytes.NewReader(csvData)
+		count, err := seederService.SeedCSV(reader)
 		if err != nil {
 			w.WriteHeader(http.StatusInternalServerError)
 			json.NewEncoder(w).Encode(map[string]string{"error": err.Error()})

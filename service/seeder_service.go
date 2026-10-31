@@ -4,7 +4,6 @@ import (
 	"database/sql"
 	"encoding/csv"
 	"io"
-	"os"
 	"strconv"
 	"strings"
 )
@@ -17,18 +16,13 @@ func NewSeederService(db *sql.DB) *SeederService {
 	return &SeederService{DB: db}
 }
 
-func (s *SeederService) SeedCSV(filePath string) (int, error) {
-	file, err := os.Open(filePath)
-	if err != nil {
-		return 0, err
-	}
-	defer file.Close()
-
-	reader := csv.NewReader(file)
+// SeedCSV sekarang menerima parameter r io.Reader (kompatibel dengan go:embed)
+func (s *SeederService) SeedCSV(r io.Reader) (int, error) {
+	reader := csv.NewReader(r)
 	reader.LazyQuotes = true
 
 	// Baca header baris pertama
-	_, err = reader.Read()
+	_, err := reader.Read()
 	if err != nil {
 		return 0, err
 	}

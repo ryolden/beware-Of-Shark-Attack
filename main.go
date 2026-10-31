@@ -1,11 +1,12 @@
 package main
 
 import (
+	"bytes"
+	_ "embed" // Embed package untuk membaca file CSV
 	"encoding/json"
 	"fmt"
 	"log"
 	"net/http"
-	"net/url"
 	"os"
 
 	"api-bewareOfSharkAttack/config"
@@ -16,17 +17,10 @@ import (
 	"api-bewareOfSharkAttack/utils"
 )
 
-func getNormalizedPath(r *http.Request) string {
-	headers := []string{"X-Invoke-Path", "X-Forwarded-Uri", "X-Original-Url", "X-Rewrite-Url"}
-	for _, h := range headers {
-		if val := r.Header.Get(h); val != "" {
-			if u, err := url.Parse(val); err == nil && u.Path != "" {
-				return u.Path
-			}
-		}
-	}
-	return r.URL.Path
-}
+// Embed file data.csv dari folder api/ ke dalam variabel csvData
+//
+//go:embed api/data.csv
+var csvData []byte
 
 func main() {
 	db := config.ConnectDB()
@@ -63,7 +57,7 @@ func main() {
 
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusOK)
-		w.Write([]byte(`{"status": "success", "message": "API Beware of Shark Attack is Live on Vercel"}`))
+		w.Write([]byte(`{"status": "success", "message": "API Beware of Shark Attack is Live"}`))
 	})
 
 	// Public Routes
@@ -98,8 +92,9 @@ func main() {
 			return
 		}
 
-		filePath := "beware of shark attack(1) - 01 shark attacks lite.csv"
-		count, err := seederService.SeedCSV(filePath)
+		// Mengubah slice byte dari embed menjadi io.Reader
+		reader := bytes.NewReader(csvData)
+		count, err := seederService.SeedCSV(reader)
 		if err != nil {
 			w.WriteHeader(http.StatusInternalServerError)
 			json.NewEncoder(w).Encode(map[string]string{"error": err.Error()})
@@ -113,17 +108,11 @@ func main() {
 		})
 	}))
 
-	// Wrapper handler untuk normalisasi path pada main.go
-	httpHandler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		r.URL.Path = getNormalizedPath(r)
-		mux.ServeHTTP(w, r)
-	})
-
 	port := os.Getenv("PORT")
 	if port == "" {
 		port = "8080"
 	}
 
 	fmt.Printf("Server berjalan di port %s\n", port)
-	log.Fatal(http.ListenAndServe(":"+port, httpHandler))
+	log.Fatal(http.ListenAndServe(":"+port, mux))
 }
