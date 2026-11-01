@@ -1,10 +1,11 @@
-package handler
+package main
 
 import (
 	"bytes"
 	_ "embed"
 	"encoding/json"
 	"net/http"
+	"net/url"
 
 	"api-bewareOfSharkAttack/config"
 	"api-bewareOfSharkAttack/handler"
@@ -20,6 +21,13 @@ import (
 var csvData []byte
 
 func Handler(w http.ResponseWriter, r *http.Request) {
+	// Ambil path URL asli dari header Vercel jika terjadi rewrite
+	if forwardedURI := r.Header.Get("X-Forwarded-Uri"); forwardedURI != "" {
+		if parsedURL, err := url.Parse(forwardedURI); err == nil {
+			r.URL.Path = parsedURL.Path
+		}
+	}
+
 	db := config.ConnectDB()
 	defer db.Close()
 
@@ -46,11 +54,11 @@ func Handler(w http.ResponseWriter, r *http.Request) {
 		w.Write([]byte(`{"status": "success", "message": "API Beware of Shark Attack is Live on Vercel"}`))
 	})
 
-	// Public Routes (Daftarkan dengan dan tanpa prefix /api)
+	// Public Routes
+	mux.HandleFunc("/api/users/register", userHandler.Register)
+	mux.HandleFunc("/api/users/login", userHandler.Login)
 	mux.HandleFunc("/api/incidents", incHandler.HandleIncidents)
 	mux.HandleFunc("/api/incidents/", incHandler.HandleIncidents)
-	mux.HandleFunc("/incidents", incHandler.HandleIncidents)
-	mux.HandleFunc("/incidents/", incHandler.HandleIncidents)
 
 	// Protected Routes (JWT)
 	mux.HandleFunc("/api/profile", middleware.JWTMiddleware(func(w http.ResponseWriter, r *http.Request) {
@@ -78,7 +86,6 @@ func Handler(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		// Mengubah slice bytes dari csvData menjadi io.Reader
 		reader := bytes.NewReader(csvData)
 		count, err := seederService.SeedCSV(reader)
 		if err != nil {
@@ -94,6 +101,6 @@ func Handler(w http.ResponseWriter, r *http.Request) {
 		})
 	}))
 
-	// Eksekusi HTTP Mux menggunakan request asli
+	// Eksekusi HTTP Mux menggunakan request asli yang sudah disesuaikan
 	mux.ServeHTTP(w, r)
 }
