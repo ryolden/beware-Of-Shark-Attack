@@ -46,11 +46,11 @@ func Handler(w http.ResponseWriter, r *http.Request) {
 		w.Write([]byte(`{"status": "success", "message": "API Beware of Shark Attack is Live on Vercel"}`))
 	})
 
-	// Public Routes
-	mux.HandleFunc("/api/users/register", userHandler.Register)
-	mux.HandleFunc("/api/users/login", userHandler.Login)
+	// Public Routes (Daftarkan dengan dan tanpa prefix /api)
 	mux.HandleFunc("/api/incidents", incHandler.HandleIncidents)
 	mux.HandleFunc("/api/incidents/", incHandler.HandleIncidents)
+	mux.HandleFunc("/incidents", incHandler.HandleIncidents)
+	mux.HandleFunc("/incidents/", incHandler.HandleIncidents)
 
 	// Protected Routes (JWT)
 	mux.HandleFunc("/api/profile", middleware.JWTMiddleware(func(w http.ResponseWriter, r *http.Request) {
