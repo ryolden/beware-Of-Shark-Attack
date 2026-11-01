@@ -1,11 +1,10 @@
-package main
+package handler
 
 import (
 	"bytes"
 	_ "embed"
 	"encoding/json"
 	"net/http"
-	"net/url"
 
 	"api-bewareOfSharkAttack/config"
 	"api-bewareOfSharkAttack/handler"
@@ -19,12 +18,6 @@ import (
 var csvData []byte
 
 func Handler(w http.ResponseWriter, r *http.Request) {
-	if forwardedURI := r.Header.Get("X-Forwarded-Uri"); forwardedURI != "" {
-		if parsedURL, err := url.Parse(forwardedURI); err == nil {
-			r.URL.Path = parsedURL.Path
-		}
-	}
-
 	db := config.ConnectDB()
 	defer db.Close()
 
@@ -43,6 +36,32 @@ func Handler(w http.ResponseWriter, r *http.Request) {
 	seederService := service.NewSeederService(db)
 
 	mux := http.NewServeMux()
+
+	// Root Route: Ambil & tampilkan 10 data insiden pertama
+	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		if r.URL.Path != "/" && r.URL.Path != "" {
+			w.WriteHeader(http.StatusNotFound)
+			json.NewEncoder(w).Encode(map[string]string{"message": "Endpoint tidak ditemukan"})
+			return
+		}
+
+		incidents, err := incService.GetAll(10, 1)
+		if err != nil {
+			w.WriteHeader(http.StatusInternalServerError)
+			json.NewEncoder(w).Encode(map[string]interface{}{
+				"status":  "error",
+				"message": err.Error(),
+			})
+			return
+		}
+
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"status": "success",
+			"total":  len(incidents),
+			"data":   incidents,
+		})
+	})
 
 	// Public Routes
 	mux.HandleFunc("/api/users/register", userHandler.Register)
@@ -63,12 +82,7 @@ func Handler(w http.ResponseWriter, r *http.Request) {
 	mux.HandleFunc("/api/activities", middleware.JWTMiddleware(actHandler.HandleActivities))
 	mux.HandleFunc("/api/activities/", middleware.JWTMiddleware(actHandler.HandleActivities))
 
-	// Protected Routes (Basic Auth)
-	mux.HandleFunc("/api/admin/dashboard", middleware.BasicAuthMiddleware(func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Type", "application/json")
-		w.Write([]byte(`{"message": "Akses admin terproteksi Basic Auth berhasil"}`))
-	}))
-
+	// Admin Seed Route
 	mux.HandleFunc("/api/admin/seed-csv", middleware.BasicAuthMiddleware(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		if r.Method != http.MethodPost {
@@ -90,13 +104,6 @@ func Handler(w http.ResponseWriter, r *http.Request) {
 			"total":   count,
 		})
 	}))
-
-	// Root Route
-	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusOK)
-		w.Write([]byte(`{"status": "success", "message": "API Beware of Shark Attack is Live on Vercel"}`))
-	})
 
 	mux.ServeHTTP(w, r)
 }
