@@ -9,6 +9,8 @@ import (
 	"net/http"
 	"os"
 
+	"github.com/joho/godotenv"
+
 	"api-bewareOfSharkAttack/config"
 	"api-bewareOfSharkAttack/handler"
 	"api-bewareOfSharkAttack/middleware"
@@ -23,6 +25,11 @@ import (
 var csvData []byte
 
 func main() {
+	// Load file .env jika berjalan di komputer lokal
+	if err := godotenv.Load(); err != nil {
+		log.Println("Peringatan: File .env tidak ditemukan, menggunakan environment OS/Vercel")
+	}
+
 	db := config.ConnectDB()
 	defer db.Close()
 
