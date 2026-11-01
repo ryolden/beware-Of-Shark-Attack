@@ -27,19 +27,17 @@ func (s *SeederService) SeedCSV(r io.Reader) (int, error) {
 		return 0, err
 	}
 
-	// 1. Jalankan 1 Transaksi Tunggal untuk Kecepatan Maksimal
 	tx, err := s.DB.Begin()
 	if err != nil {
 		return 0, err
 	}
 	defer tx.Rollback()
 
-	// 2. Cache In-Memory agar Tidak Perlu Kueri DB Berulang Kali per Baris
+	// Cache In-Memory
 	locationMap := make(map[string]int)
 	speciesMap := make(map[string]int)
 	activityMap := make(map[string]int)
 
-	// Prepare Statement untuk Insert Incident
 	stmtIncident, err := tx.Prepare(`
 		INSERT INTO incidents (incident_date, year, location_id, species_id, activity_id, injury, fatal)
 		VALUES ($1, $2, $3, $4, $5, $6, $7)
@@ -82,13 +80,14 @@ func (s *SeederService) SeedCSV(r io.Reader) (int, error) {
 
 		year, _ := strconv.Atoi(yearStr)
 
-		// --- 1. Get/Insert Location (Cached) ---
+		// --- 1. Get/Insert Location (Aman dari Transaction Abort) ---
 		locKey := fmt.Sprintf("%s|%s|%s", countryStr, areaStr, locationStr)
 		locationID, exists := locationMap[locKey]
 		if !exists {
 			err = tx.QueryRow(`
 				INSERT INTO locations (country, area, location_name)
 				VALUES ($1, $2, $3)
+				ON CONFLICT (country, area, location_name) DO UPDATE SET country = EXCLUDED.country
 				RETURNING id`, countryStr, areaStr, locationStr).Scan(&locationID)
 			if err != nil {
 				tx.QueryRow(`SELECT id FROM locations WHERE country=$1 AND area=$2 AND location_name=$3`,
@@ -99,12 +98,13 @@ func (s *SeederService) SeedCSV(r io.Reader) (int, error) {
 			}
 		}
 
-		// --- 2. Get/Insert Species (Cached) ---
+		// --- 2. Get/Insert Species (Aman dari Transaction Abort) ---
 		speciesID, exists := speciesMap[speciesStr]
 		if !exists {
 			err = tx.QueryRow(`
 				INSERT INTO shark_species (species_name, species_group)
 				VALUES ($1, 'General')
+				ON CONFLICT (species_name) DO UPDATE SET species_name = EXCLUDED.species_name
 				RETURNING id`, speciesStr).Scan(&speciesID)
 			if err != nil {
 				tx.QueryRow(`SELECT id FROM shark_species WHERE species_name=$1`, speciesStr).Scan(&speciesID)
@@ -114,13 +114,13 @@ func (s *SeederService) SeedCSV(r io.Reader) (int, error) {
 			}
 		}
 
-		// --- 3. Get/Insert Activity (Cached) ---
+		// --- 3. Get/Insert Activity (Aman dari Transaction Abort) ---
 		activityID, exists := activityMap[activityStr]
 		if !exists {
 			err = tx.QueryRow(`
 				INSERT INTO activities (name, category)
 				VALUES ($1, 'Water Activity')
-				ON CONFLICT (name) DO UPDATE SET name=EXCLUDED.name
+				ON CONFLICT (name) DO UPDATE SET name = EXCLUDED.name
 				RETURNING id`, activityStr).Scan(&activityID)
 			if err != nil {
 				tx.QueryRow(`SELECT id FROM activities WHERE name=$1`, activityStr).Scan(&activityID)
@@ -130,7 +130,7 @@ func (s *SeederService) SeedCSV(r io.Reader) (int, error) {
 			}
 		}
 
-		// --- 4. Insert Incident via Prepared Statement ---
+		// --- 4. Insert Incident ---
 		var locPtr, specPtr, actPtr interface{}
 		if locationID > 0 {
 			locPtr = locationID
@@ -147,12 +147,12 @@ func (s *SeederService) SeedCSV(r io.Reader) (int, error) {
 			importedCount++
 		}
 
-		if importedCount >= 25 {
+		// Batasi 30 record agar respon HTTP Vercel instan (< 1.5 detik)
+		if importedCount >= 30 {
 			break
 		}
 	}
 
-	// Commit Seluruh Transaksi Sekaligus
 	if err := tx.Commit(); err != nil {
 		return 0, err
 	}
