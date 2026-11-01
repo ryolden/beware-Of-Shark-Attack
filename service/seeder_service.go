@@ -146,6 +146,11 @@ func (s *SeederService) SeedCSV(r io.Reader) (int, error) {
 		if err == nil {
 			importedCount++
 		}
+
+		// Batasi maksimal 100 data agar eksekusi selesai cepat (< 2 detik) dan menghindari Vercel timeout
+		if importedCount >= 100 {
+			break
+		}
 	}
 
 	// Commit Seluruh Transaksi Sekaligus
