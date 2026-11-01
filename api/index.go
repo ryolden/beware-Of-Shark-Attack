@@ -2,7 +2,7 @@ package handler
 
 import (
 	"bytes"
-	_ "embed" // Import embed untuk membaca file CSV saat kompilasi
+	_ "embed"
 	"encoding/json"
 	"net/http"
 
