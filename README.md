@@ -132,24 +132,24 @@ Server akan aktif di http://localhost:8081.2. Menjalankan Seeding Data CSVLakuka
   ]
 }
 2. User Authentication EndpointsPOST /api/users/registerAkses: PublicRequest Body:JSON{
-  "username": "johndoe",
-  "email": "johndoe@example.com",
-  "password": "password123"
+  "username": "asepAkamsi",
+  "email": "asep@akamsi.com",
+  "password": "123"
 }
 Response Success (201 Created):JSON{
   "status": "success",
   "message": "Registrasi berhasil",
   "data": {
     "id": 1,
-    "username": "johndoe",
-    "email": "johndoe@example.com",
+    "username": "asepAkamsi",
+    "email": "asep@Akamsi.com",
     "role": "user",
     "created_at": "2026-03-30T10:00:00Z"
   }
 }
 POST /api/users/loginAkses: PublicRequest Body:JSON{
-  "email": "johndoe@example.com",
-  "password": "password123"
+  "email": "asep@Akamsi.com",
+  "password": "123"
 }
 Response Success (200 OK):JSON{
   "status": "success",
