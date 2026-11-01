@@ -15,13 +15,10 @@ import (
 	"api-bewareOfSharkAttack/utils"
 )
 
-// Embed file data.csv yang berada di dalam folder api/ langsung ke dalam biner
-//
 //go:embed data.csv
 var csvData []byte
 
 func Handler(w http.ResponseWriter, r *http.Request) {
-	// Ambil path URL asli dari header Vercel jika terjadi rewrite
 	if forwardedURI := r.Header.Get("X-Forwarded-Uri"); forwardedURI != "" {
 		if parsedURL, err := url.Parse(forwardedURI); err == nil {
 			r.URL.Path = parsedURL.Path
@@ -46,13 +43,6 @@ func Handler(w http.ResponseWriter, r *http.Request) {
 	seederService := service.NewSeederService(db)
 
 	mux := http.NewServeMux()
-
-	// Root Route
-	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusOK)
-		w.Write([]byte(`{"status": "success", "message": "API Beware of Shark Attack is Live on Vercel"}`))
-	})
 
 	// Public Routes
 	mux.HandleFunc("/api/users/register", userHandler.Register)
@@ -101,6 +91,12 @@ func Handler(w http.ResponseWriter, r *http.Request) {
 		})
 	}))
 
-	// Eksekusi HTTP Mux menggunakan request asli yang sudah disesuaikan
+	// Root Route
+	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		w.Write([]byte(`{"status": "success", "message": "API Beware of Shark Attack is Live on Vercel"}`))
+	})
+
 	mux.ServeHTTP(w, r)
 }
