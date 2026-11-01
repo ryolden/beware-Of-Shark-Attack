@@ -37,29 +37,38 @@ func Handler(w http.ResponseWriter, r *http.Request) {
 
 	mux := http.NewServeMux()
 
-	// Root Route: Ambil & tampilkan 10 data insiden pertama
+	// Handler utama (Root / Default)
 	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
-		if r.URL.Path != "/" && r.URL.Path != "" {
-			w.WriteHeader(http.StatusNotFound)
-			json.NewEncoder(w).Encode(map[string]string{"message": "Endpoint tidak ditemukan"})
-			return
-		}
 
-		incidents, err := incService.GetAll(10, 1)
-		if err != nil {
-			w.WriteHeader(http.StatusInternalServerError)
+		// Izinkan request ke /, empty, atau /api/index.go
+		if r.URL.Path == "/" || r.URL.Path == "" || r.URL.Path == "/api/index.go" {
+			// Ambil 10 data insiden pertama dari Neon PostgreSQL
+			incidents, err := incService.GetAll(10, 1)
+			if err != nil {
+				w.WriteHeader(http.StatusInternalServerError)
+				json.NewEncoder(w).Encode(map[string]interface{}{
+					"status":  "error",
+					"message": err.Error(),
+				})
+				return
+			}
+
+			w.WriteHeader(http.StatusOK)
 			json.NewEncoder(w).Encode(map[string]interface{}{
-				"status":  "error",
-				"message": err.Error(),
+				"status": "success",
+				"total":  len(incidents),
+				"data":   incidents,
 			})
 			return
 		}
 
+		// Path tidak dikenal
+		w.WriteHeader(http.StatusNotFound)
 		json.NewEncoder(w).Encode(map[string]interface{}{
-			"status": "success",
-			"total":  len(incidents),
-			"data":   incidents,
+			"status":  "error",
+			"message": "Endpoint tidak ditemukan",
+			"path":    r.URL.Path,
 		})
 	})
 
@@ -82,7 +91,12 @@ func Handler(w http.ResponseWriter, r *http.Request) {
 	mux.HandleFunc("/api/activities", middleware.JWTMiddleware(actHandler.HandleActivities))
 	mux.HandleFunc("/api/activities/", middleware.JWTMiddleware(actHandler.HandleActivities))
 
-	// Admin Seed Route
+	// Protected Routes (Basic Auth & Seeder)
+	mux.HandleFunc("/api/admin/dashboard", middleware.BasicAuthMiddleware(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.Write([]byte(`{"message": "Akses admin terproteksi Basic Auth berhasil"}`))
+	}))
+
 	mux.HandleFunc("/api/admin/seed-csv", middleware.BasicAuthMiddleware(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		if r.Method != http.MethodPost {
