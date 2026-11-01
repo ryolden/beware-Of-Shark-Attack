@@ -3,7 +3,6 @@ package service
 import (
 	"database/sql"
 	"encoding/csv"
-	"fmt"
 	"io"
 	"strconv"
 	"strings"
@@ -26,26 +25,6 @@ func (s *SeederService) SeedCSV(r io.Reader) (int, error) {
 	if err != nil {
 		return 0, err
 	}
-
-	tx, err := s.DB.Begin()
-	if err != nil {
-		return 0, err
-	}
-	defer tx.Rollback()
-
-	// Cache In-Memory
-	locationMap := make(map[string]int)
-	speciesMap := make(map[string]int)
-	activityMap := make(map[string]int)
-
-	stmtIncident, err := tx.Prepare(`
-		INSERT INTO incidents (incident_date, year, location_id, species_id, activity_id, injury, fatal)
-		VALUES ($1, $2, $3, $4, $5, $6, $7)
-	`)
-	if err != nil {
-		return 0, err
-	}
-	defer stmtIncident.Close()
 
 	importedCount := 0
 
@@ -80,57 +59,38 @@ func (s *SeederService) SeedCSV(r io.Reader) (int, error) {
 
 		year, _ := strconv.Atoi(yearStr)
 
-		// --- 1. Get/Insert Location (Aman dari Transaction Abort) ---
-		locKey := fmt.Sprintf("%s|%s|%s", countryStr, areaStr, locationStr)
-		locationID, exists := locationMap[locKey]
-		if !exists {
-			err = tx.QueryRow(`
+		// 1. Get or Insert Location
+		var locationID int
+		err = s.DB.QueryRow(`SELECT id FROM locations WHERE country=$1 AND area=$2 AND location_name=$3`,
+			countryStr, areaStr, locationStr).Scan(&locationID)
+		if err == sql.ErrNoRows {
+			_ = s.DB.QueryRow(`
 				INSERT INTO locations (country, area, location_name)
 				VALUES ($1, $2, $3)
-				ON CONFLICT (country, area, location_name) DO UPDATE SET country = EXCLUDED.country
 				RETURNING id`, countryStr, areaStr, locationStr).Scan(&locationID)
-			if err != nil {
-				tx.QueryRow(`SELECT id FROM locations WHERE country=$1 AND area=$2 AND location_name=$3`,
-					countryStr, areaStr, locationStr).Scan(&locationID)
-			}
-			if locationID > 0 {
-				locationMap[locKey] = locationID
-			}
 		}
 
-		// --- 2. Get/Insert Species (Aman dari Transaction Abort) ---
-		speciesID, exists := speciesMap[speciesStr]
-		if !exists {
-			err = tx.QueryRow(`
+		// 2. Get or Insert Species
+		var speciesID int
+		err = s.DB.QueryRow(`SELECT id FROM shark_species WHERE species_name=$1`, speciesStr).Scan(&speciesID)
+		if err == sql.ErrNoRows {
+			_ = s.DB.QueryRow(`
 				INSERT INTO shark_species (species_name, species_group)
 				VALUES ($1, 'General')
-				ON CONFLICT (species_name) DO UPDATE SET species_name = EXCLUDED.species_name
 				RETURNING id`, speciesStr).Scan(&speciesID)
-			if err != nil {
-				tx.QueryRow(`SELECT id FROM shark_species WHERE species_name=$1`, speciesStr).Scan(&speciesID)
-			}
-			if speciesID > 0 {
-				speciesMap[speciesStr] = speciesID
-			}
 		}
 
-		// --- 3. Get/Insert Activity (Aman dari Transaction Abort) ---
-		activityID, exists := activityMap[activityStr]
-		if !exists {
-			err = tx.QueryRow(`
+		// 3. Get or Insert Activity
+		var activityID int
+		err = s.DB.QueryRow(`SELECT id FROM activities WHERE name=$1`, activityStr).Scan(&activityID)
+		if err == sql.ErrNoRows {
+			_ = s.DB.QueryRow(`
 				INSERT INTO activities (name, category)
 				VALUES ($1, 'Water Activity')
-				ON CONFLICT (name) DO UPDATE SET name = EXCLUDED.name
 				RETURNING id`, activityStr).Scan(&activityID)
-			if err != nil {
-				tx.QueryRow(`SELECT id FROM activities WHERE name=$1`, activityStr).Scan(&activityID)
-			}
-			if activityID > 0 {
-				activityMap[activityStr] = activityID
-			}
 		}
 
-		// --- 4. Insert Incident ---
+		// 4. Insert Incident
 		var locPtr, specPtr, actPtr interface{}
 		if locationID > 0 {
 			locPtr = locationID
@@ -142,19 +102,14 @@ func (s *SeederService) SeedCSV(r io.Reader) (int, error) {
 			actPtr = activityID
 		}
 
-		_, err = stmtIncident.Exec(dateStr, year, locPtr, specPtr, actPtr, injuryStr, fatalStr)
+		_, err = s.DB.Exec(`
+			INSERT INTO incidents (incident_date, year, location_id, species_id, activity_id, injury, fatal)
+			VALUES ($1, $2, $3, $4, $5, $6, $7)`,
+			dateStr, year, locPtr, specPtr, actPtr, injuryStr, fatalStr)
+
 		if err == nil {
 			importedCount++
 		}
-
-		// Batasi 30 record agar respon HTTP Vercel instan (< 1.5 detik)
-		if importedCount >= 30 {
-			break
-		}
-	}
-
-	if err := tx.Commit(); err != nil {
-		return 0, err
 	}
 
 	return importedCount, nil
